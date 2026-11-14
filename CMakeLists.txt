@@ -35,7 +35,10 @@ pico_sdk_init()
 
 # Add executable. Default name is the project name, version 0.1
 
-add_executable(clock clock.c )
+add_executable(clock
+    src/clock.c
+    src/bmp280.c
+)
 
 pico_set_program_name(clock "clock")
 pico_set_program_version(clock "0.1")
@@ -51,12 +54,13 @@ target_link_libraries(clock
 # Add the standard include files to the build
 target_include_directories(clock PRIVATE
         ${CMAKE_CURRENT_LIST_DIR}
+        ${CMAKE_CURRENT_LIST_DIR}/src
 )
 
 # Add any user requested libraries
 target_link_libraries(clock 
-        
-        )
+    pico_stdlib
+    hardware_i2c
+)
 
 pico_add_extra_outputs(clock)
-
