@@ -31,11 +31,12 @@ int main()
 {
     stdio_init_all();
 
+    gpio_init(15);
+    gpio_set_dir(15, GPIO_IN);
+
     i2c_init(i2c0, SSD1306_I2C_CLK * 1000);
-    gpio_set_function(16, GPIO_FUNC_I2C);
-    gpio_set_function(17, GPIO_FUNC_I2C);
-    gpio_pull_up(16);
-    gpio_pull_up(17);
+    gpio_set_function(20, GPIO_FUNC_I2C);
+    gpio_set_function(21, GPIO_FUNC_I2C);
 
     sleep_ms(100);
 
@@ -80,15 +81,9 @@ int main()
         while (true) tight_loop_contents();
     }
 
-    memset(buf, 0, SSD1306_WIDTH);
-    WriteString(buf, 24, 0, "CONNECTING...");
-    render(buf, &frame_area);
-
     i2c_init(i2c1, 100 * 1000); 
     gpio_set_function(18, GPIO_FUNC_I2C);
     gpio_set_function(19, GPIO_FUNC_I2C);
-    gpio_pull_up(18);
-    gpio_pull_up(19);
 
     sleep_ms(100);
 
@@ -98,7 +93,7 @@ int main()
     bmp280_get_calib_params(&bmp_params);
 
     DHT20 dht_sensor;
-    int dht_status = DHT20_init(&dht_sensor);
+    DHT20_init(&dht_sensor);
     float current_hum_pct = 0.0f;
 
     int32_t raw_temperature = 0;
@@ -126,9 +121,11 @@ int main()
     bool is_12h_format = false;
     bool force_redraw = true;
 
-    bool last_btn_state = true;
-    uint32_t last_btn_time_us = 0;
-    uint32_t last_sensor_time_us;
+    bool btn_stable_state = true;
+    bool btn_last_raw_state = true;
+    uint32_t btn_last_time_us = 0;
+
+    uint32_t sensor_last_time_us = 0;
     
 
     while (true) {
@@ -137,19 +134,29 @@ int main()
 
         uint32_t current_us = time_us_32();
 
-        // bool current_btn_state = gpio_get(BTN1);
-        // if (last_btn_state && !current_btn_state) {
-            // if ((current_us - last_btn_time_us) > DEBOUNCE_DELAY) {
-                // last_btn_time_us = current_us;
-                // is_12h_format = !is_12h_format;
-                // force_redraw = true;
-            // }
-        // }
-        // last_btn_state = current_btn_state;
+        bool btn_raw_state = gpio_get(15);
+        if(btn_raw_state != btn_last_raw_state)
+        {
+            btn_last_time_us = current_us;
+            btn_last_raw_state = btn_raw_state;
+        }
+        if ((current_us - btn_last_time_us) > DEBOUNCE_DELAY) 
+        {
+            if(btn_raw_state != btn_stable_state)
+            {
+                btn_stable_state = btn_raw_state;
+                if(btn_stable_state == false)
+                {
+                    btn_last_time_us = current_us;
+                    is_12h_format = !is_12h_format;
+                    force_redraw = true;
+                }
+            }
+        }
 
         //Citire SENZORI 
-        if ((current_us - last_sensor_time_us) >= SENSOR_INTERVAL) {
-            last_sensor_time_us = current_us;
+        if ((current_us - sensor_last_time_us) >= SENSOR_INTERVAL) {
+            sensor_last_time_us = current_us;
 
             bmp280_read_raw(&raw_temperature, &raw_pressure);
             
@@ -173,8 +180,16 @@ int main()
             force_redraw = false;
 
             memset(buf, 0, SSD1306_BUF_LEN);
-            WriteString(buf, 28, 0, "CONNECTED");
-            WriteString(buf, 120, 0, "!");
+            int link_status = cyw43_tcpip_link_status(&cyw43_state, CYW43_ITF_STA);
+            if (link_status == CYW43_LINK_UP)
+            {
+                WriteString(buf, 28, 0, "CONNECTED");
+                WriteString(buf, 120, 0, "!");
+            }
+            else
+            {
+                WriteString(buf, 12, 0, "NOT CONNECTED");
+            }
             
             WriteString(buf, 0, 48, "HUM   TEMP   BAR");
             char sensor_str[24];
