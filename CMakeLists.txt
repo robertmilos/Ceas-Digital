@@ -39,6 +39,7 @@ add_executable(empty
     src/empty.c
     src/ssd1306.c
     src/bmp280.c
+    src/dht20.c
 )
 
 pico_set_program_name(empty "empty")
