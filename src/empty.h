@@ -1,8 +1,8 @@
 #ifndef EMPTY_H
 #define EMPTY_H
 
-#define WIFI_SSID       "DIGI-4bZg"
-#define WIFI_PASSWORD   "fSSJX5EzGG"
+#define WIFI_SSID       "iPhone - Robert"
+#define WIFI_PASSWORD   "robita2004"
 #define TIMEZONE        2
 #define BTN1            14
 #define BTN2            15
