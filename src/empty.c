@@ -9,6 +9,7 @@
 #include "lwip/apps/sntp.h"
 
 #include "ssd1306.h"
+#include "bmp280.h"
 #include "empty.h"
 
 static volatile bool time_sync = false;
@@ -82,6 +83,24 @@ int main()
     WriteString(buf, 24, 0, "CONNECTING...");
     render(buf, &frame_area);
 
+    i2c_init(i2c1, 100 * 1000); 
+    gpio_set_function(18, GPIO_FUNC_I2C);
+    gpio_set_function(19, GPIO_FUNC_I2C);
+    gpio_pull_up(18);
+    gpio_pull_up(19);
+
+    sleep_ms(100);
+
+    bmp280_init();
+
+    struct bmp280_calib_param bmp_params;
+    bmp280_get_calib_params(&bmp_params);
+
+    int32_t raw_temperature = 0;
+    int32_t raw_pressure = 0;
+    float current_temp_c = 0.0f;
+    float current_press_kpa = 0.0f;
+
     sntp_setoperatingmode(SNTP_OPMODE_POLL);
     sntp_setservername(0, "pool.ntp.org");
     sntp_init();
@@ -123,15 +142,19 @@ int main()
         // }
         // last_btn_state = current_btn_state;
 
-        //Citire SENZORI (ex. DHT11 / Presiune la fiecare 2 secunde)
+        //Citire SENZORI 
         if ((current_us - last_sensor_time_us) >= SENSOR_INTERVAL) {
             last_sensor_time_us = current_us;
 
-            // Aici vei apela functiile tale de citire pentru senzori:
-            // dht11_read_reg(&temp, &hum);
-            // pressure = read_pressure();
+            bmp280_read_raw(&raw_temperature, &raw_pressure);
+            
+            int32_t temp_cal = bmp280_convert_temp(raw_temperature, &bmp_params);
+            int32_t press_cal = bmp280_convert_pressure(raw_pressure, raw_temperature, &bmp_params);
+            
+            current_temp_c = temp_cal / 100.0f;
+            current_press_kpa = press_cal / 1000.0f;
 
-            force_redraw = true; // Actualizam valorile pe ecran dupa citire
+            force_redraw = true; 
         }
 
         aon_timer_get_time_calendar(&now);
@@ -145,7 +168,10 @@ int main()
             WriteString(buf, 120, 0, "!");
             
             WriteString(buf, 0, 48, "HUM   TEMP   BAR");
-            WriteString(buf, 0, 56, "--%   ---*  ---K");
+            char sensor_str[24];
+            snprintf(sensor_str, sizeof(sensor_str), "--%%    %2.0f*  %3.0fK", current_temp_c, current_press_kpa);
+            
+            WriteString(buf, 0, 56, sensor_str);
 
             if (is_12h_format) {
                 int hour_12 = now.tm_hour % 12;

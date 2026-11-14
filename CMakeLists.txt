@@ -38,6 +38,7 @@ pico_sdk_init()
 add_executable(empty
     src/empty.c
     src/ssd1306.c
+    src/bmp280.c
 )
 
 pico_set_program_name(empty "empty")
@@ -63,4 +64,3 @@ target_link_libraries(empty
 )
 
 pico_add_extra_outputs(empty)
-
