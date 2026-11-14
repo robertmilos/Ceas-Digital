@@ -10,6 +10,7 @@
 
 #include "ssd1306.h"
 #include "bmp280.h"
+#include "dht20.h"
 #include "empty.h"
 
 static volatile bool time_sync = false;
@@ -96,6 +97,10 @@ int main()
     struct bmp280_calib_param bmp_params;
     bmp280_get_calib_params(&bmp_params);
 
+    DHT20 dht_sensor;
+    int dht_status = DHT20_init(&dht_sensor);
+    float current_hum_pct = 0.0f;
+
     int32_t raw_temperature = 0;
     int32_t raw_pressure = 0;
     float current_temp_c = 0.0f;
@@ -154,6 +159,10 @@ int main()
             current_temp_c = temp_cal / 100.0f;
             current_press_kpa = press_cal / 1000.0f;
 
+            if (getMeasurement(&dht_sensor) == DHT20_OK) {
+                current_hum_pct = getHumidity(&dht_sensor);
+            }
+
             force_redraw = true; 
         }
 
@@ -169,7 +178,7 @@ int main()
             
             WriteString(buf, 0, 48, "HUM   TEMP   BAR");
             char sensor_str[24];
-            snprintf(sensor_str, sizeof(sensor_str), "--%%    %2.0f*  %3.0fK", current_temp_c, current_press_kpa);
+            snprintf(sensor_str, sizeof(sensor_str), "%2.0f%%    %2.0f*  %3.0fK", current_hum_pct, current_temp_c, current_press_kpa);
             
             WriteString(buf, 0, 56, sensor_str);
 
