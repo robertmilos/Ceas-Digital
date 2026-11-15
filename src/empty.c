@@ -31,8 +31,14 @@ int main()
 {
     stdio_init_all();
 
-    gpio_init(15);
-    gpio_set_dir(15, GPIO_IN);
+    gpio_init(BTN_MODE_PIN);
+    gpio_set_dir(BTN_MODE_PIN, GPIO_IN);
+
+    gpio_init(BTN_ACTION_PIN);
+    gpio_set_dir(BTN_ACTION_PIN, GPIO_IN);
+
+    gpio_init(BTN_SET_PIN);
+    gpio_set_dir(BTN_SET_PIN, GPIO_IN);
 
     i2c_init(i2c0, SSD1306_I2C_CLK * 1000);
     gpio_set_function(20, GPIO_FUNC_I2C);
@@ -113,7 +119,6 @@ int main()
     char date_str[6];
     char *months[12] = {"JAN", "FEB", "MAR", "APR", "MAY", "JUN", "JUL", "AUG", "SEP","OCT", "NOV", "DEC"};
     char time_str[6];
-    char fmt_str[4];
     char sec_str[3];
     struct tm now;
 
@@ -121,12 +126,26 @@ int main()
     bool is_12h_format = false;
     bool force_redraw = true;
 
-    bool btn_stable_state = true;
-    bool btn_last_raw_state = true;
-    uint32_t btn_last_time_us = 0;
-
     uint32_t sensor_last_time_us = 0;
     
+    ScreenMode current_screen = SCREEN_HOME;
+    Button btn_mode   = { .pin = BTN_MODE_PIN,   .stable_state = true, .last_raw_state = true, .last_change_us = 0 };
+    Button btn_action = { .pin = BTN_ACTION_PIN, .stable_state = true, .last_raw_state = true, .last_change_us = 0 };
+    Button btn_set = { .pin = BTN_SET_PIN, .stable_state = true, .last_raw_state = true, .last_change_us = 0 };
+
+    uint8_t alarm_hour = 0;
+    uint8_t alarm_min = 0;
+    bool alarm_enabled = false;
+    uint32_t set_hold_start_us = 0;
+    uint32_t set_last_repeat_us = 0;
+    bool set_is_holding = false;
+    uint32_t action_hold_start_us = 0;
+    bool action_is_holding = false;
+
+    bool sw_running = false;
+    uint32_t sw_start_us = 0;
+    uint32_t sw_elapsed_ms = 0;
+    uint32_t last_sw_draw_ms = 0;
 
     while (true) {
 
@@ -134,27 +153,121 @@ int main()
 
         uint32_t current_us = time_us_32();
 
-        bool btn_raw_state = gpio_get(15);
-        if(btn_raw_state != btn_last_raw_state)
+        if (button_pressed(&btn_mode, current_us)) 
         {
-            btn_last_time_us = current_us;
-            btn_last_raw_state = btn_raw_state;
+            current_screen = (current_screen + 1) % SCREEN_COUNT;
+            force_redraw = true;
         }
-        if ((current_us - btn_last_time_us) > DEBOUNCE_DELAY) 
+
+        if (button_pressed(&btn_action, current_us)) 
         {
-            if(btn_raw_state != btn_stable_state)
+            switch (current_screen) 
             {
-                btn_stable_state = btn_raw_state;
-                if(btn_stable_state == false)
-                {
-                    btn_last_time_us = current_us;
+                case SCREEN_HOME:
                     is_12h_format = !is_12h_format;
+                    break;
+
+                case SCREEN_ALARM:
+                    alarm_enabled = !alarm_enabled;
+                    action_hold_start_us = current_us;
+                    action_is_holding = true;
+                    break;
+
+                case SCREEN_STOPWATCH:
+                    if (!sw_running) 
+                    {
+                        sw_start_us = current_us - (sw_elapsed_ms * 1000);
+                        sw_running = true;
+                    } 
+                    else 
+                    {
+                        sw_elapsed_ms = (current_us - sw_start_us) / 1000;
+                        sw_running = false;
+                    }
+                    break;
+
+                default:
+                    break;
+            }
+            force_redraw = true;
+        }
+
+        if (button_pressed(&btn_set, current_us)) 
+        {
+            switch (current_screen) 
+            {
+                case SCREEN_ALARM:
+                {
+                    alarm_add_15_min(&alarm_hour, &alarm_min);
+                    set_hold_start_us = current_us;
+                    set_last_repeat_us = current_us;
+                    set_is_holding = true;
                     force_redraw = true;
+                    break;
                 }
+
+                case SCREEN_STOPWATCH:
+                {
+                    sw_running = false;
+                    sw_elapsed_ms = 0;
+                    sw_start_us = 0;
+                    last_sw_draw_ms = 0;
+                    force_redraw = true;
+                    break;
+                }
+
+                default:
+                    break;
             }
         }
 
-        //Citire SENZORI 
+        if (current_screen == SCREEN_ALARM && action_is_holding) 
+        {
+            if (btn_action.stable_state == false) 
+            {
+                if ((current_us - action_hold_start_us) >= 1000000) 
+                {
+                    alarm_hour = 0;
+                    alarm_min = 0;
+                    alarm_enabled = false;
+                    action_is_holding = false;
+                    force_redraw = true;
+                }
+            } 
+            else 
+            {
+                action_is_holding = false;
+            }
+        }
+
+        if (current_screen == SCREEN_ALARM && set_is_holding) 
+        {
+            if (btn_set.stable_state == false) 
+            {
+                if ((current_us - set_hold_start_us) >= 1000000 &&
+                    (current_us - set_last_repeat_us) >= 100000) 
+                {
+                    set_last_repeat_us = current_us;
+                    alarm_add_15_min(&alarm_hour, &alarm_min);
+                    force_redraw = true;
+                }
+            } 
+            else 
+            {
+                set_is_holding = false;
+            }
+        }
+
+        if (sw_running) 
+        {
+            sw_elapsed_ms = (current_us - sw_start_us) / 1000;
+            if (current_screen == SCREEN_STOPWATCH && (sw_elapsed_ms - last_sw_draw_ms) >= 100) 
+            {
+                last_sw_draw_ms = sw_elapsed_ms;
+                force_redraw = true;
+            }
+        }
+
         if ((current_us - sensor_last_time_us) >= SENSOR_INTERVAL) {
             sensor_last_time_us = current_us;
 
@@ -180,43 +293,105 @@ int main()
             force_redraw = false;
 
             memset(buf, 0, SSD1306_BUF_LEN);
-            int link_status = cyw43_tcpip_link_status(&cyw43_state, CYW43_ITF_STA);
-            if (link_status == CYW43_LINK_UP)
+
+            switch (current_screen)
             {
-                WriteString(buf, 28, 0, "CONNECTED");
-                WriteString(buf, 120, 0, "!");
-            }
-            else
-            {
-                WriteString(buf, 12, 0, "NOT CONNECTED");
-            }
+                case SCREEN_HOME:
+                {
+                    int link_status = cyw43_tcpip_link_status(&cyw43_state, CYW43_ITF_STA);
+                    if (link_status == CYW43_LINK_UP)
+                    {
+                        WriteString(buf, 28, 0, "CONNECTED");
+                        WriteString(buf, 120, 0, "!");
+                    }
+                    else
+                    {
+                        WriteString(buf, 12, 0, "NOT CONNECTED");
+                    }
+
+                    if (alarm_enabled)
+                    {
+                        WriteString(buf, 0, 0, "@");
+                    }
+                    else
+                    {
+                        WriteString(buf, 0, 0, " ");
+                    }
             
-            WriteString(buf, 0, 48, "HUM   TEMP   BAR");
-            char sensor_str[24];
-            snprintf(sensor_str, sizeof(sensor_str), "%2.0f%%    %2.0f*  %3.0fK", current_hum_pct, current_temp_c, current_press_kpa);
-            
-            WriteString(buf, 0, 56, sensor_str);
+                    WriteString(buf, 0, 48, "HUM   TEMP   BAR");
+                    char sensor_str[24];
+                    snprintf(sensor_str, sizeof(sensor_str), "%2.0f%%    %2.0f*  %3.0fK", current_hum_pct, current_temp_c, current_press_kpa);
+                    WriteString(buf, 0, 56, sensor_str);
 
-            if (is_12h_format) {
-                int hour_12 = now.tm_hour % 12;
-                if (hour_12 == 0) hour_12 = 12;
-                char *period = (now.tm_hour >= 12) ? "PM" : "AM";
+                    if (is_12h_format) 
+                    {
+                        int hour_12 = now.tm_hour % 12;
+                        if (hour_12 == 0) hour_12 = 12;
+                        char *period = (now.tm_hour >= 12) ? "PM" : "AM";
 
-                snprintf(time_str, sizeof(time_str), "%2d:%02d", hour_12, now.tm_min);
-                WriteString(buf, 0, 24, period);
-                WriteString2x(buf, 24, 24, time_str);
-            } else {
-                snprintf(time_str, sizeof(time_str), "%2d:%02d", now.tm_hour, now.tm_min);
-                WriteString(buf, 0, 24, "24H");
-                WriteString2x(buf, 24, 24, time_str);
+                        snprintf(time_str, sizeof(time_str), "%2d:%02d", hour_12, now.tm_min);
+                        WriteString(buf, 0, 24, period);
+                        WriteString2x(buf, 24, 24, time_str);
+                    } 
+                    else 
+                    {
+                        snprintf(time_str, sizeof(time_str), "%2d:%02d", now.tm_hour, now.tm_min);
+                        WriteString(buf, 0, 24, "24H");
+                        WriteString2x(buf, 24, 24, time_str);
+                    }
+
+                    snprintf(sec_str, sizeof(sec_str), "%02d", now.tm_sec);
+                    WriteString(buf, 104, 32, sec_str);
+
+                    snprintf(date_str, sizeof(date_str), "%3s%2d", months[now.tm_mon], now.tm_mday);
+                    WriteString(buf, 80, 16, date_str);
+                    break;
+                }
+
+                case SCREEN_ALARM:
+                {
+                    WriteString(buf, 44, 0, "ALARM");
+                    WriteString(buf, 0, 0, alarm_enabled ? "@" : " ");
+                    if (is_12h_format) 
+                    {
+                        int hour_12 = alarm_hour % 12;
+                        if (hour_12 == 0) hour_12 = 12;
+                        char *period = (alarm_hour >= 12) ? "PM" : "AM";
+
+                        snprintf(time_str, sizeof(time_str), "%2d:%02d", hour_12, alarm_min);
+                        WriteString(buf, 0, 24, period);
+                        WriteString2x(buf, 24, 24, time_str);
+                    } 
+                    else 
+                    {
+                        snprintf(time_str, sizeof(time_str), "%2d:%02d", alarm_hour, alarm_min);
+                        WriteString(buf, 0, 24, "24H");
+                        WriteString2x(buf, 24, 24, time_str);
+                    }
+                    break;
+                }
+
+                case SCREEN_STOPWATCH: 
+                {
+                    WriteString(buf, 28, 0, "STOPWATCH");
+                    uint32_t total_sec = sw_elapsed_ms / 1000;
+                    uint32_t mins = total_sec / 60;
+                    uint32_t secs = total_sec % 60;
+                    uint32_t tenths = (sw_elapsed_ms % 1000) / 100;
+
+                    snprintf(time_str, sizeof(time_str), "%02lu:%02lu", mins, secs);
+                    WriteString2x(buf, 24, 24, time_str);
+
+                    snprintf(sec_str, sizeof(sec_str), ".%lu", tenths);
+                    WriteString(buf, 104, 32, sec_str);
+
+                    break;
+                }
+
+
+                default:
+                    break;
             }
-
-            snprintf(sec_str, sizeof(sec_str), "%02d", now.tm_sec);
-            WriteString(buf, 104, 32, sec_str);
-
-            snprintf(date_str, sizeof(date_str), "%3s%2d", months[now.tm_mon], now.tm_mday);
-            WriteString(buf, 80, 16, date_str);
-
             render(buf, &frame_area);
         }
     }
