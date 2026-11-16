@@ -67,7 +67,7 @@ int main()
     WriteString(buf, 0, 24, "24H");
     WriteString2x(buf, 24, 24, "--:--");
     WriteString(buf, 104, 32, "--");
-    WriteString(buf, 0, 48, "HUM   TEMP   BAR");
+    WriteString(buf, 0, 48, "HUM   TEMP   BRM");
     WriteString(buf, 0, 56, "--%   ---*  ---K");
     render(buf, &frame_area);
 
@@ -318,9 +318,9 @@ int main()
                         WriteString(buf, 0, 0, " ");
                     }
             
-                    WriteString(buf, 0, 48, "HUM   TEMP   BAR");
+                    WriteString(buf, 0, 48, "HUM   TEMP   BRM");
                     char sensor_str[24];
-                    snprintf(sensor_str, sizeof(sensor_str), "%2.0f%%    %2.0f*  %3.0fK", current_hum_pct, current_temp_c, current_press_kpa);
+                    snprintf(sensor_str, sizeof(sensor_str), "%2.0f%%    %2.0f*  %3.0fk", current_hum_pct, current_temp_c, current_press_kpa);
                     WriteString(buf, 0, 56, sensor_str);
 
                     if (is_12h_format) 
