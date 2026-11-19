@@ -7,13 +7,16 @@
 #include "pico/aon_timer.h"
 #include "hardware/i2c.h"
 #include "lwip/apps/sntp.h"
+#include "hardware/pwm.h"
+#include "hardware/gpio.h"
 
 #include "ssd1306.h"
 #include "bmp280.h"
 #include "dht20.h"
+#include "mh-fmd.h"
 #include "empty.h"
 
-static volatile bool time_sync = false;
+volatile bool time_sync = false;
 
 void set_system_time_us(uint32_t sec, uint32_t us)
 {
@@ -27,9 +30,41 @@ void set_system_time_us(uint32_t sec, uint32_t us)
     time_sync = true;
 }
 
+bool button_pressed(Button *btn, uint32_t current_us) 
+{
+    bool raw = gpio_get(btn->pin);
+    if (raw != btn->last_raw_state) 
+    {
+        btn->last_change_us = current_us;
+        btn->last_raw_state = raw;
+    }
+    if ((current_us - btn->last_change_us) >= DEBOUNCE_DELAY) 
+    {
+        if (raw != btn->stable_state) 
+        {
+            btn->stable_state = raw;
+            if (btn->stable_state == false) 
+            {
+                return true;
+            }
+        }
+    }
+    return false;
+}
+
+void alarm_add_15_min(uint8_t *hour, uint8_t *min) {
+    *min += 15;
+    if (*min >= 60) {
+        *min -= 60;
+        *hour = (*hour + 1) % 24;
+    }
+}
+
 int main()
 {
     stdio_init_all();
+
+    buzzer_init();
 
     gpio_init(BTN_MODE_PIN);
     gpio_set_dir(BTN_MODE_PIN, GPIO_IN);
@@ -153,14 +188,27 @@ int main()
 
         uint32_t current_us = time_us_32();
 
+        buzzer_update(current_us);
+
+        aon_timer_get_time_calendar(&now);
+
+        if (alarm_enabled && now.tm_hour == alarm_hour && now.tm_min == alarm_min && now.tm_sec == 0) 
+        {
+            tone(true, current_us);
+        }
+
         if (button_pressed(&btn_mode, current_us)) 
         {
+            tone(false, current_us);
+            beep(current_us);
             current_screen = (current_screen + 1) % SCREEN_COUNT;
             force_redraw = true;
         }
 
         if (button_pressed(&btn_action, current_us)) 
         {
+            tone(false, current_us);
+            beep(current_us);
             switch (current_screen) 
             {
                 case SCREEN_HOME:
@@ -194,6 +242,8 @@ int main()
 
         if (button_pressed(&btn_set, current_us)) 
         {
+            tone(false, current_us);
+            beep(current_us);
             switch (current_screen) 
             {
                 case SCREEN_ALARM:
@@ -285,8 +335,6 @@ int main()
 
             force_redraw = true; 
         }
-
-        aon_timer_get_time_calendar(&now);
 
         if (now.tm_sec != last_sec || force_redraw) {
             last_sec = now.tm_sec;
