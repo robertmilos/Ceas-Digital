@@ -32,34 +32,7 @@ typedef struct
     uint32_t last_change_us;
 } Button;
 
-bool button_pressed(Button *btn, uint32_t current_us) 
-{
-    bool raw = gpio_get(btn->pin);
-    if (raw != btn->last_raw_state) 
-    {
-        btn->last_change_us = current_us;
-        btn->last_raw_state = raw;
-    }
-    if ((current_us - btn->last_change_us) >= DEBOUNCE_DELAY) 
-    {
-        if (raw != btn->stable_state) 
-        {
-            btn->stable_state = raw;
-            if (btn->stable_state == false) 
-            {
-                return true;
-            }
-        }
-    }
-    return false;
-}
-
-void alarm_add_15_min(uint8_t *hour, uint8_t *min) {
-    *min += 15;
-    if (*min >= 60) {
-        *min -= 60;
-        *hour = (*hour + 1) % 24;
-    }
-}
+bool button_pressed(Button *btn, uint32_t current_us);
+void alarm_add_15_min(uint8_t *hour, uint8_t *min);
 
 #endif

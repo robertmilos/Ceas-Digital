@@ -40,6 +40,7 @@ add_executable(empty
     src/ssd1306.c
     src/bmp280.c
     src/dht20.c
+    src/mh-fmd.c
 )
 
 pico_set_program_name(empty "empty")
@@ -62,6 +63,7 @@ target_link_libraries(empty
     pico_cyw43_arch_lwip_poll
     pico_lwip_sntp
     pico_aon_timer
+    hardware_pwm
 )
 
 pico_add_extra_outputs(empty)
