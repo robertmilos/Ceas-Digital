@@ -10,7 +10,7 @@
 #include "hardware/regs/pads_bank0.h"
 #include "hardware/regs/sio.h"
 
-#define REG32(a)       (*(volatile uint32_t *)(a))
+#define REG32(addr)       (*(volatile uint32_t *)(addr))
 #define ATOMIC_CLR     0x3000u
 
 #define BUZ_PIN        10u
