@@ -9,6 +9,7 @@
 #include "hardware/regs/io_bank0.h"
 #include "hardware/regs/pads_bank0.h"
 #include "hardware/regs/sio.h"
+#include "hardware/regs/timer.h"
 
 #define REG32(addr)       (*(volatile uint32_t *)(addr))
 #define ATOMIC_CLR     0x3000u
@@ -27,6 +28,8 @@
 #define SIO_GPIO_OUT_SET REG32(SIO_BASE + SIO_GPIO_OUT_SET_OFFSET)
 #define SIO_GPIO_OUT_CLR REG32(SIO_BASE + SIO_GPIO_OUT_CLR_OFFSET)
 #define SIO_GPIO_OE_SET  REG32(SIO_BASE + SIO_GPIO_OE_SET_OFFSET)
+
+#define TIMERAWL REG32(TIMER0_BASE + TIMER_TIMERAWL_OFFSET)
 
 #define MHFMD_SELFTEST 1 
 

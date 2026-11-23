@@ -185,7 +185,7 @@ int main()
 
         cyw43_arch_poll();
 
-        uint32_t current_us = time_us_32();
+        uint32_t current_us = TIMERAWL;
 
         buzzer_update(current_us);
 
